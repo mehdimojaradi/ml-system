@@ -2,6 +2,8 @@
 .DS_Store
 .idea
 w.code-workspace
+.envs/*
+!.envs/.env.example
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
