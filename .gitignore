@@ -4,6 +4,7 @@
 w.code-workspace
 .envs/*
 !.envs/.env.example
+logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
