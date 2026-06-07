@@ -1,0 +1,28 @@
+api: # desc: Traefik API configuration
+  dashboard: true # desc: Enable the Traefik dashboard
+  insecure: true # desc: Allow access to the API without authentication (not recommended for production)
+
+log: # desc: Traefik logging configuration
+  level: DEBUG # desc: Set the log level
+  format: json # desc: Set the log format
+
+accessLog: # desc: Traefik access log configuration
+  format: json # desc: Set the access log format
+  filePath: /var/log/traefik/access.log # desc: Set the access log file path
+
+middlewares: # desc: Traefik middlewares configuration
+  retry: # desc: Define a retry middleware
+    retry:  # desc: Configure the retry middleware
+      attempts: 3 # desc: Number of retry attempts
+      initialInterval: 500ms # desc: Initial interval between retries
+
+providers: # desc: Traefik providers configuration
+  docker:
+    endpoint: "unix:///var/run/docker.sock" # desc: Docker socket endpoint. Use "tcp://host:port" for remote Docker API
+    watch: true # desc: Watch for changes in Docker containers
+    exposedByDefault: false # desc: Only expose containers with explicit labels
+    network: nextgen_local_nw # desc: Specify the Docker network to use for Traefik 
+
+entryPoints: # desc: Entry points define how Traefik listens for incoming requests.
+  web:
+    address: ":80" # desc: Listen on port 80 for HTTP traffic
