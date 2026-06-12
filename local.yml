@@ -1,20 +1,78 @@
-services:
-  postgres:
-    build:
-      context: .
-      dockerfile: ./backend/docker/local/postgres/Dockerfile
-    ports:
-      - "5432:5432"
-    volumes:
-      - nextgen_local_db:/var/lib/postgresql/data
-    env_file:
-      - ./.envs/.env.local
-    networks:
-      - nextgen_local_nw
+services: # Define all Docker Compose services for local development.
+  traefik: # Reverse proxy service for routing local hostnames.
+    image: docker.io/traefik:v3.2 # Use Traefik v3.2 container image.
+    restart: unless-stopped # Keep Traefik running unless manually stopped.
+    ports: # Expose Traefik entrypoint and dashboard ports.
+      - "80:80" # Map HTTP traffic from host port 80 to container port 80. This port should be the same as the entrypoint port defined in traefik.yml for routing to backend services.
+      - "8080:8080" # Map Traefik dashboard/API from host 8080 to container 8080.
+    volumes: # Mount files/sockets needed by Traefik. It's required since Traefik needs to read Docker metadata to automatically discover backend services and their routing rules.
+      - /var/run/docker.sock:/var/run/docker.sock:ro # Allow Traefik to read Docker service metadata.
+      - ./backend/docker/local/traefik/traefik.yml:/etc/traefik/traefik.yml # Load static Traefik config from project file.
+    networks: # Connect Traefik to the shared local network.
+      - nextgen_local_nw # Use the external local network for service discovery. It should be the same network that backend services are connected to for Traefik to route traffic to them.
+    command: # Override/append Traefik startup flags. Command to run traefik
+      - --providers.docker # Enable Docker provider for dynamic routing rules.
 
-networks:
-  nextgen_local_nw:
-    external: true
+  api: &api # FastAPI application service definition with reusable anchor.
+    build: # Build API image from local FastAPI Dockerfile.
+      context: . # Use repository root as Docker build context.
+      dockerfile: ./backend/docker/local/fastapi/Dockerfile # Path to local FastAPI Dockerfile.
+    volumes: # Mount source and logs for live development.
+      - .:/src # Bind mount project files into container workdir.
+      - ./backend/app/logs:/src/backend/app/logs # Persist app logs on host for inspection.
+    ports: # Expose API port to host machine.
+      - "8000:8000" # Map host port 8000 to API container port 8000.
+    env_file: # Load runtime environment variables for the app.
+      - ./.envs/.env.local # Local environment file used during development.
+    depends_on: # Start API after required dependency services.
+      - postgres # Require postgres service before API startup.
+      - mailpit # Require mailpit service before API startup. This ensures the API can connect to the mail server on startup and prevents connection errors if mailpit is not ready.
+    command: /start.sh # Run the FastAPI startup script inside the container.
+    networks: # Connect API to the shared local network.
+      - nextgen_local_nw # Allow communication with postgres and traefik.
+    labels: # Traefik dynamic routing labels for this service. It's needed for Traefik to automatically discover this service and route traffic to it based on the defined rules.
+      - "traefik.enable=true" # Enable Traefik discovery for API container.
+      - "traefik.http.routers.api.entrypoints=web" # Route API traffic through Traefik web entrypoint.
+      - "traefik.http.routers.api.rule=Host(`api.localhost`)" # Match requests sent to api.localhost.
+      - "traefik.http.routers.api.service=api-service" # Bind router to named Traefik service.
+      - "traefik.http.services.api-service.loadbalancer.server.port=8000" # Forward routed traffic to container port 8000.
+      # - "traefik.http.services.api-service.loadbalancer.healthcheck.path=/health" # Use /health endpoint for backend health checks.
+      # - "traefik.http.services.api-service.loadbalancer.healthcheck.interval=30s" # Run health checks every 30 seconds.
+      # - "traefik.http.services.api-service.loadbalancer.healthcheck.timeout=5s" # Mark check failed if no response in 5 seconds.
 
-volumes:
-  nextgen_local_db:
+  mailpit: # Mailpit service for capturing outgoing emails during development.
+    image: docker.io/axllent/mailpit:v1.20.3 # Use the latest Mailpit image from Docker Hub.
+    # restart: unless-stopped # Keep Mailpit running unless manually stopped.
+    ports: # Expose Mailpit web UI and SMTP ports to host.
+      - "8025:8025" # Map Mailpit web UI from host 8025 to container 8025.
+      - "1025:1025" # Map Mailpit SMTP from host 1025 to container 1025 for API to send emails to it.
+    volumes: # Mount Mailpit data directory for email persistence.
+      - nextgen_mailpit_data:/data # Store captured emails in a named volume for persistence across container restarts.
+    environment: # Load environment variables for Mailpit configuration.
+      MP_MAX_MESSAGES: 5000 # Limit Mailpit to store a maximum of 5000 messages to prevent excessive disk usage during development.
+      MP_DATA_FILE: /data/mailpit.db # Use the mounted volume for Mailpit's internal database to persist captured emails.
+      MP_SMTP_AUTH_ACCEPT_ANY: 1 # Allow Mailpit to accept any SMTP authentication credentials for simplicity during development.
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1 # Allow Mailpit to accept insecure SMTP connections without TLS for simplicity during development.
+    networks: # Connect Mailpit to the shared local network.
+      - nextgen_local_nw # Allow API to connect to mail server on this network.
+
+  postgres: # PostgreSQL database service for application data.
+    build: # Build postgres image from local Dockerfile.
+      context: . # Use repository root as Docker build context.
+      dockerfile: ./backend/docker/local/postgres/Dockerfile # Path to local postgres Dockerfile.
+    ports: # Publish PostgreSQL port to host.
+      - "5432:5432" # Map host 5432 to container 5432 for DB access.
+    volumes: # Persist PostgreSQL data across container restarts.
+      - nextgen_local_db:/var/lib/postgresql/data # Store database files in named volume.
+    env_file: # Load environment variables for DB initialization.
+      - ./.envs/.env.local # Local environment file with postgres settings.
+    networks: # Attach postgres to shared project network.
+      - nextgen_local_nw # Make postgres reachable by other services on this network.
+
+networks: # Declare Docker networks used by services.
+  nextgen_local_nw: # Shared local network name used across compose files.
+    external: true # Reuse an existing Docker network instead of creating one.
+
+volumes: # Declare named volumes used by services.
+  nextgen_local_db: # Named volume for persistent postgres data.
+  nextgen_mailpit_data: # Named volume for persistent Mailpit email storage.

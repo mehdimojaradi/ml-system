@@ -1,8 +1,8 @@
 from fastapi import FastAPI
-from .api.main import api_router
-from .core.config import settings
+from backend.app.api.main import api_router
+from backend.app.core.config import settings
 from contextlib import asynccontextmanager
-from .core.db import init_db
+from backend.app.core.db import init_db
 
 @asynccontextmanager #description="Lifespan context manager to handle application startup and shutdown events, including database initialization"
 async def lifespan(app: FastAPI): #description="Lifespan function to initialize the database before the application starts and perform any necessary cleanup on shutdown"

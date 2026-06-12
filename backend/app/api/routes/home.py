@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.core.logging import logger
+from backend.app.core.logging import logger
 
 router = APIRouter(prefix="/home", tags=["home"])
 
