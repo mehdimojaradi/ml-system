@@ -84,12 +84,15 @@ RUN pip install --no-cache-dir --no-index --find-links=/wheels/ /wheels/* \
 COPY --chown=${APP_USER}:{APP_GROUP} ./backend/docker/local/fastapi/entrypoint.sh /entrypoint.sh
 # Copy main app start script.
 COPY --chown=${APP_USER}:{APP_GROUP} ./backend/docker/local/fastapi/start.sh /start.sh
+COPY --chown=${APP_USER}:{APP_GROUP} ./backend/docker/local/fastapi/celery/worker/start.sh /start-celeryworker.sh
+COPY --chown=${APP_USER}:{APP_GROUP} ./backend/docker/local/fastapi/celery/flower/start.sh /start-flower.sh
+COPY --chown=${APP_USER}:{APP_GROUP} ./backend/docker/local/fastapi/celery/beat/start.sh /start-celerybeat.sh
 
 # Normalize line endings and make scripts executable.
 # for example, if the scripts were created on Windows, they might have CRLF line endings which can cause issues in Unix-based environments.
-RUN sed -i 's/\r$//g' /entrypoint.sh /start.sh && \
+RUN sed -i 's/\r$//g' /entrypoint.sh /start.sh /start-celeryworker.sh /start-flower.sh /start-celerybeat.sh && \
     # Mark all startup scripts as executable. \
-    chmod +x /entrypoint.sh /start.sh
+    chmod +x /entrypoint.sh /start.sh /start-celeryworker.sh /start-flower.sh /start-celerybeat.sh
 
 # Copy application source code into the image.
 COPY --chown=${APP_USER}:${APP_GROUP} . ${APP_HOME}

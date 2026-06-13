@@ -27,6 +27,8 @@ services: # Define all Docker Compose services for local development.
     depends_on: # Start API after required dependency services.
       - postgres # Require postgres service before API startup.
       - mailpit # Require mailpit service before API startup. This ensures the API can connect to the mail server on startup and prevents connection errors if mailpit is not ready.
+      - redis # Require redis service before API startup for caching/result backend support.
+      - rabbitmq # Require rabbitmq service before API startup for Celery broker connectivity.
     command: /start.sh # Run the FastAPI startup script inside the container.
     networks: # Connect API to the shared local network.
       - nextgen_local_nw # Allow communication with postgres and traefik.
@@ -69,10 +71,61 @@ services: # Define all Docker Compose services for local development.
     networks: # Attach postgres to shared project network.
       - nextgen_local_nw # Make postgres reachable by other services on this network.
 
+  redis: # Redis service used by Celery as result backend and for fast in-memory data needs.
+    image: docker.io/redis:7.0-alpine # Use lightweight Redis image for local development.
+    command: redis-server --appendonly yes # Enable append-only persistence for better durability. data persits across restarts and probable crashes.
+    networks: # Connect Redis to shared local network.
+      - nextgen_local_nw # Make Redis reachable by API and Celery services.
+
+  rabbitmq: # RabbitMQ service used by Celery as the message broker.
+    image: docker.io/rabbitmq:3.13-management # Use RabbitMQ image that includes management UI.
+    ports: # Expose AMQP and management UI ports to host.
+      - "15672:15672" # Map RabbitMQ management UI from host 15672 to container 15672.
+      - "5672:5672" # Map AMQP broker traffic from host 5672 to container 5672.
+    volumes: # Persist RabbitMQ data across restarts.
+      - nextgen_rabbitmq_data:/var/lib/rabbitmq # Store RabbitMQ state in named volume.
+    networks: # Connect RabbitMQ to shared local network.
+      - nextgen_local_nw # Make RabbitMQ reachable by API and Celery services.
+    labels: # Traefik labels for routing RabbitMQ management UI by hostname.
+      - "traefik.enable=true" # Enable Traefik discovery for RabbitMQ service.
+      - "traefik.http.routers.rabbitmq.entrypoints=web" # Route RabbitMQ UI through web entrypoint.
+      - "traefik.http.routers.rabbitmq.rule=Host(`rabbitmq.localhost`)" # Match requests sent to rabbitmq.localhost.
+      - "traefik.http.routers.rabbitmq.service=rabbitmq-service" # Bind router to named Traefik service.
+      - "traefik.http.services.rabbitmq-service.loadbalancer.server.port=15672" # Forward traffic to RabbitMQ management UI port.
+
+  celeryworker: # Celery worker service for running asynchronous background jobs.
+    <<: *api # Reuse API service base config (build, env_file, volumes, dependencies, network).
+    ports: [] # Do not expose API port for worker containers.
+    command: /start-celeryworker.sh # Start Celery worker process using the worker startup script.
+
+  celerybeat: # Celery beat scheduler service for periodic task dispatch.
+    <<: *api # Reuse API service base config (build, env_file, volumes, dependencies, network).
+    ports: [] # Do not expose API port for scheduler container.
+    command: /start-celerybeat.sh # Start Celery beat using the beat startup script.
+
+  flower: # Flower service for monitoring and administrating Celery workers/tasks.
+    <<: *api # Reuse API base config so Flower shares build/env/network setup.
+    ports: # Expose Flower web UI to host.
+      - "5555:5555" # Map Flower UI from host 5555 to container 5555.
+    volumes: # Persist Flower data in a named volume.
+      - nextgen_flower_data:/data # Store Flower runtime data in a persistent volume.
+    command: /start-flower.sh # Start Flower using the local Flower startup script.
+    depends_on: # Ensure broker/cache are available before Flower starts.
+      - redis # Flower needs Redis for related Celery backend interactions.
+      - rabbitmq # Flower needs RabbitMQ to observe broker/workers.
+    labels: # Traefik labels for routing Flower UI by hostname.
+      - "traefik.enable=true" # Enable Traefik discovery for Flower service.
+      - "traefik.http.routers.flower.entrypoints=web" # Route Flower UI through Traefik web entrypoint.
+      - "traefik.http.routers.flower.rule=Host(`flower.localhost`)" # Match requests sent to flower.localhost.
+      - "traefik.http.routers.flower.service=flower-service" # Bind router to named Flower Traefik service.
+      - "traefik.http.services.flower-service.loadbalancer.server.port=5555" # Forward traffic to Flower UI port.
+
 networks: # Declare Docker networks used by services.
   nextgen_local_nw: # Shared local network name used across compose files.
     external: true # Reuse an existing Docker network instead of creating one.
 
-volumes: # Declare named volumes used by services.
+volumes: # Declare named volumes used by services. 
   nextgen_local_db: # Named volume for persistent postgres data.
   nextgen_mailpit_data: # Named volume for persistent Mailpit email storage.
+  nextgen_rabbitmq_data: # Named volume for persistent RabbitMQ data storage.
+  nextgen_flower_data: # Named volume for persistent Flower data storage.
