@@ -38,9 +38,9 @@ services: # Define all Docker Compose services for local development.
       - "traefik.http.routers.api.rule=Host(`api.localhost`)" # Match requests sent to api.localhost.
       - "traefik.http.routers.api.service=api-service" # Bind router to named Traefik service.
       - "traefik.http.services.api-service.loadbalancer.server.port=8000" # Forward routed traffic to container port 8000.
-      # - "traefik.http.services.api-service.loadbalancer.healthcheck.path=/health" # Use /health endpoint for backend health checks.
-      # - "traefik.http.services.api-service.loadbalancer.healthcheck.interval=30s" # Run health checks every 30 seconds.
-      # - "traefik.http.services.api-service.loadbalancer.healthcheck.timeout=5s" # Mark check failed if no response in 5 seconds.
+      - "traefik.http.services.api-service.loadbalancer.healthcheck.path=/health" # Use /health endpoint for backend health checks.
+      - "traefik.http.services.api-service.loadbalancer.healthcheck.interval=30s" # Run health checks every 30 seconds.
+      - "traefik.http.services.api-service.loadbalancer.healthcheck.timeout=5s" # Mark check failed if no response in 5 seconds.
 
   mailpit: # Mailpit service for capturing outgoing emails during development.
     image: docker.io/axllent/mailpit:v1.20.3 # Use the latest Mailpit image from Docker Hub.
