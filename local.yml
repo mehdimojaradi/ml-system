@@ -20,7 +20,8 @@ services: # Define all Docker Compose services for local development.
     volumes: # Mount source and logs for live development.
       - .:/src # Bind mount project files into container workdir.
       - ./backend/app/logs:/src/backend/app/logs # Persist app logs on host for inspection.
-    ports: [] # API is routed through Traefik; no direct host port publish to avoid local forwarding conflicts.
+    ports:
+      - "18000:8000" # Publish API directly on host port 18000 to avoid port-8000 forwarding conflicts.
     env_file: # Load runtime environment variables for the app.
       - ./.envs/.env.local # Local environment file used during development.
     depends_on: # Start API after required dependency services.
@@ -44,8 +45,9 @@ services: # Define all Docker Compose services for local development.
   mailpit: # Mailpit service for capturing outgoing emails during development.
     image: docker.io/axllent/mailpit:v1.20.3 # Use the latest Mailpit image from Docker Hub.
     # restart: unless-stopped # Keep Mailpit running unless manually stopped.
-    ports: # Expose SMTP port to host; web UI remains internal unless routed through Traefik.
-      - "1025:1025" # Map Mailpit SMTP from host 1025 to container 1025 for API to send emails to it.
+    ports: # Expose SMTP and web UI ports to host.
+      - "1025:1025" # Map SMTP from host 1025 to container 1025 for app email delivery.
+      - "18025:8025" # Map Mailpit web UI from host 18025 to container 8025.
     volumes: # Mount Mailpit data directory for email persistence.
       - nextgen_mailpit_data:/data # Store captured emails in a named volume for persistence across container restarts.
     environment: # Load environment variables for Mailpit configuration.
