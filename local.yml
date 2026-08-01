@@ -3,8 +3,8 @@ services: # Define all Docker Compose services for local development.
     image: docker.io/traefik:v3.2 # Use Traefik v3.2 container image.
     restart: unless-stopped # Keep Traefik running unless manually stopped.
     ports: # Expose Traefik entrypoint and dashboard ports.
-      - "80:80" # Map HTTP traffic from host port 80 to container port 80. This port should be the same as the entrypoint port defined in traefik.yml for routing to backend services.
-      - "8080:8080" # Map Traefik dashboard/API from host 8080 to container 8080.
+      - "18080:80" # Map HTTP traffic from host port 18080 to container port 80 to avoid local host forwarding conflicts.
+      - "18081:8080" # Map Traefik dashboard/API from host 18081 to container port 8080 to avoid local host forwarding conflicts.
     volumes: # Mount files/sockets needed by Traefik. It's required since Traefik needs to read Docker metadata to automatically discover backend services and their routing rules.
       - /var/run/docker.sock:/var/run/docker.sock:ro # Allow Traefik to read Docker service metadata.
       - ./backend/docker/local/traefik/traefik.yml:/etc/traefik/traefik.yml # Load static Traefik config from project file.
@@ -20,8 +20,7 @@ services: # Define all Docker Compose services for local development.
     volumes: # Mount source and logs for live development.
       - .:/src # Bind mount project files into container workdir.
       - ./backend/app/logs:/src/backend/app/logs # Persist app logs on host for inspection.
-    ports: # Expose API port to host machine.
-      - "8000:8000" # Map host port 8000 to API container port 8000.
+    ports: [] # API is routed through Traefik; no direct host port publish to avoid local forwarding conflicts.
     env_file: # Load runtime environment variables for the app.
       - ./.envs/.env.local # Local environment file used during development.
     depends_on: # Start API after required dependency services.
@@ -45,8 +44,7 @@ services: # Define all Docker Compose services for local development.
   mailpit: # Mailpit service for capturing outgoing emails during development.
     image: docker.io/axllent/mailpit:v1.20.3 # Use the latest Mailpit image from Docker Hub.
     # restart: unless-stopped # Keep Mailpit running unless manually stopped.
-    ports: # Expose Mailpit web UI and SMTP ports to host.
-      - "8025:8025" # Map Mailpit web UI from host 8025 to container 8025.
+    ports: # Expose SMTP port to host; web UI remains internal unless routed through Traefik.
       - "1025:1025" # Map Mailpit SMTP from host 1025 to container 1025 for API to send emails to it.
     volumes: # Mount Mailpit data directory for email persistence.
       - nextgen_mailpit_data:/data # Store captured emails in a named volume for persistence across container restarts.
